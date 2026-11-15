@@ -59,12 +59,17 @@ export async function deleteConversation(conversationId: string): Promise<void> 
 /**
  * Kirim percakapan ke backend dan baca balasan secara streaming (SSE).
  * Setiap potongan teks dikirim lewat onToken, sekaligus menyimpan riwayat ke database.
+ *
+ * onIncomplete (opsional) dipanggil kalau stream berakhir TANPA sinyal selesai
+ * (tidak ada [DONE] / finish_reason), misalnya koneksi diputus server/hosting,
+ * atau jawaban terpotong karena batas token (finish_reason "length").
  */
 export async function streamChat(
   messages: ChatPayload[],
   onToken: (token: string) => void,
   signal: AbortSignal,
-  meta?: StreamMeta
+  meta?: StreamMeta,
+  onIncomplete?: (reason: string) => void
 ): Promise<void> {
   const res = await fetch(`${API_URL}/api/chat/stream`, {
     method: "POST",
@@ -92,38 +97,71 @@ export async function streamChat(
   let buffer = "";
   let full = "";
   let gotToken = false;
+  let sawDone = false;
+  let finishReason: string | null = null;
+  let readError: unknown = null;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  // Proses satu baris SSE. Mengembalikan true kalau stream sudah selesai ([DONE]).
+  const handleLine = (raw: string): boolean => {
+    const line = raw.trim();
+    if (!line.startsWith("data:")) return false;
 
-    const chunk = decoder.decode(value, { stream: true });
-    full += chunk;
-    buffer += chunk;
+    const payload = line.slice(5).trim();
+    if (payload === "[DONE]") {
+      sawDone = true;
+      return true;
+    }
 
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+    try {
+      const json = JSON.parse(payload);
+      const token = json?.choices?.[0]?.delta?.content ?? json?.delta?.text;
+      if (typeof token === "string" && token) {
+        gotToken = true;
+        onToken(token);
+      }
+      const fr = json?.choices?.[0]?.finish_reason ?? json?.delta?.stop_reason;
+      if (fr) finishReason = String(fr);
+    } catch {
+      // baris SSE tidak lengkap / bukan JSON, lewati
+    }
+    return false;
+  };
 
-    for (const raw of lines) {
-      const line = raw.trim();
-      if (!line.startsWith("data:")) continue;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-      const payload = line.slice(5).trim();
-      if (payload === "[DONE]") return;
+      const chunk = decoder.decode(value, { stream: true });
+      full += chunk;
+      buffer += chunk;
 
-      try {
-        const json = JSON.parse(payload);
-        const token =
-          json?.choices?.[0]?.delta?.content ??
-          json?.delta?.text;
-        if (typeof token === "string" && token) {
-          gotToken = true;
-          onToken(token);
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const raw of lines) {
+        if (handleLine(raw)) {
+          // [DONE]: stream selesai normal
+          try {
+            await reader.cancel();
+          } catch {
+            // abaikan
+          }
+          return;
         }
-      } catch {
-        // baris SSE tidak lengkap / bukan JSON, lewati
       }
     }
+  } catch (err) {
+    // Dibatalkan pengguna (tombol stop): lempar ulang seperti perilaku fetch biasa
+    if ((err as { name?: string })?.name === "AbortError") throw err;
+    // Koneksi putus di tengah jalan: simpan, lalu laporkan di bawah
+    readError = err;
+  }
+
+  // Proses sisa buffer yang belum berakhir dengan newline
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    for (const raw of buffer.split("\n")) handleLine(raw);
   }
 
   // Cadangan: kalau provider membalas JSON biasa (bukan SSE)
@@ -135,9 +173,25 @@ export async function streamChat(
         json?.reply ??
         json?.output ??
         json?.text;
-      if (typeof text === "string" && text) onToken(text);
+      if (typeof text === "string" && text) {
+        gotToken = true;
+        onToken(text);
+      }
     } catch {
       // tidak ada isi yang bisa dibaca
+    }
+  }
+
+  // Deteksi stream yang tidak selesai dengan benar
+  if (gotToken && !sawDone) {
+    if (finishReason === "length") {
+      onIncomplete?.("Jawaban terpotong karena batas panjang (max_tokens).");
+    } else if (!finishReason) {
+      onIncomplete?.(
+        readError
+          ? "Koneksi terputus sebelum jawaban selesai."
+          : "Server menutup koneksi sebelum jawaban selesai (kemungkinan timeout hosting)."
+      );
     }
   }
 }
