@@ -91,10 +91,18 @@ export default function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true
+  );
 
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const closeSidebarOnMobile = () => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  };
 
   const refreshConversations = async () => {
     try {
@@ -116,6 +124,7 @@ export default function App() {
   }, [messages, loading]);
 
   const handleSelectConversation = async (convId: string) => {
+    closeSidebarOnMobile();
     if (convId === activeConvId) return;
     abortRef.current?.abort();
     setLoading(false);
@@ -139,6 +148,7 @@ export default function App() {
     setActiveConvId(uid());
     setMessages([]);
     setInput("");
+    closeSidebarOnMobile();
   };
 
   const handleDeleteConversation = async (e: React.MouseEvent, convId: string) => {
@@ -243,121 +253,138 @@ export default function App() {
   const stop = () => abortRef.current?.abort();
 
   return (
-    <div className="flex h-full bg-[#262624] text-[#ECEBE8]">
-      {/* Sidebar Riwayat Chat ala Claude */}
+    <div className="relative flex h-screen h-dvh w-full overflow-hidden bg-[#262624] text-[#ECEBE8]">
+      {/* Backdrop gelap untuk mobile saat sidebar terbuka */}
+      {sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-[1px] transition-opacity md:hidden"
+        />
+      )}
+
+      {/* Sidebar Riwayat Chat (Drawer di mobile, kolapsibel di desktop) */}
       <aside
-        className={`${
-          sidebarOpen ? "w-64" : "w-0 overflow-hidden"
-        } flex shrink-0 flex-col border-r border-[#333330] bg-[#1F1F1D] transition-all duration-200`}
+        className={`fixed inset-y-0 left-0 z-40 flex shrink-0 flex-col border-r border-[#333330] bg-[#1F1F1D] transition-all duration-200 ease-out md:static md:z-auto ${
+          sidebarOpen
+            ? "w-72 max-w-[82vw] translate-x-0 md:w-64 md:max-w-none"
+            : "w-72 max-w-[82vw] -translate-x-full md:w-0 md:translate-x-0 md:overflow-hidden md:border-r-0"
+        }`}
       >
-        <div className="flex h-14 items-center justify-between px-3">
-          <div className="flex items-center gap-2">
-            <img
-              src={giyuAvatar}
-              alt="Jidan AI"
-              className="h-7 w-7 rounded-full object-cover object-top ring-1 ring-[#3E3E3B]"
-            />
-            <span className="text-sm font-semibold tracking-tight text-[#ECEBE8]">Jidan AI</span>
+        <div className="flex h-full w-72 max-w-[82vw] flex-col md:w-64 md:max-w-none">
+          <div className="flex h-14 shrink-0 items-center justify-between px-3">
+            <div className="flex items-center gap-2">
+              <img
+                src={giyuAvatar}
+                alt="Jidan AI"
+                className="h-7 w-7 rounded-full object-cover object-top ring-1 ring-[#3E3E3B]"
+              />
+              <span className="text-sm font-semibold tracking-tight text-[#ECEBE8]">Jidan AI</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              title="Tutup sidebar"
+              aria-label="Tutup sidebar"
+              className="rounded-lg p-2 text-[#9B9A97] transition hover:bg-[#2C2C29] hover:text-[#ECEBE8] active:bg-[#32322E]"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M9 3v18" />
+              </svg>
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            title="Tutup sidebar"
-            className="rounded-lg p-1.5 text-[#9B9A97] transition hover:bg-[#2C2C29] hover:text-[#ECEBE8]"
-          >
-            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M9 3v18" />
-            </svg>
-          </button>
-        </div>
 
-        <div className="px-3 pb-2">
-          <button
-            type="button"
-            onClick={handleNewChat}
-            className="flex w-full items-center gap-2 rounded-xl border border-[#3E3E3B] bg-[#2A2A27] px-3 py-2 text-xs font-medium text-[#ECEBE8] transition hover:border-[#D97757]/60 hover:bg-[#32322E]"
-          >
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#D97757] text-[12px] font-bold text-white">
-              +
-            </span>
-            <span>Chat baru</span>
-          </button>
-        </div>
+          <div className="shrink-0 px-3 pb-2">
+            <button
+              type="button"
+              onClick={handleNewChat}
+              className="flex w-full items-center gap-2 rounded-xl border border-[#3E3E3B] bg-[#2A2A27] px-3 py-2.5 text-xs font-medium text-[#ECEBE8] transition hover:border-[#D97757]/60 hover:bg-[#32322E] active:scale-[0.99]"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#D97757] text-[12px] font-bold text-white">
+                +
+              </span>
+              <span>Chat baru</span>
+            </button>
+          </div>
 
-        <div className="px-3 pt-2 text-[11px] font-medium text-[#8E8D8A]">Terbaru</div>
+          <div className="shrink-0 px-3 pt-2 text-[11px] font-medium text-[#8E8D8A]">Terbaru</div>
 
-        <nav className="mt-1 flex-1 space-y-0.5 overflow-y-auto px-2 pb-4">
-          {conversations.length === 0 ? (
-            <p className="px-2 py-3 text-xs text-[#73726E]">Belum ada riwayat chat.</p>
-          ) : (
-            conversations.map((conv) => {
-              const isActive = conv.id === activeConvId;
-              return (
-                <div
-                  key={conv.id}
-                  onClick={() => handleSelectConversation(conv.id)}
-                  className={`group flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2 text-xs transition ${
-                    isActive
-                      ? "bg-[#30302E] font-medium text-[#ECEBE8]"
-                      : "text-[#B5B3AE] hover:bg-[#292926] hover:text-[#ECEBE8]"
-                  }`}
-                >
-                  <span className="truncate pr-2">{conv.title}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => handleDeleteConversation(e, conv.id)}
-                    title="Hapus chat"
-                    aria-label="Hapus chat"
-                    className="shrink-0 rounded p-1 text-[#73726E] opacity-0 transition hover:bg-[#3A3A37] hover:text-red-400 group-hover:opacity-100"
+          <nav className="mt-1 flex-1 space-y-0.5 overflow-y-auto px-2 pb-4">
+            {conversations.length === 0 ? (
+              <p className="px-2 py-3 text-xs text-[#73726E]">Belum ada riwayat chat.</p>
+            ) : (
+              conversations.map((conv) => {
+                const isActive = conv.id === activeConvId;
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => handleSelectConversation(conv.id)}
+                    className={`group flex cursor-pointer items-center justify-between rounded-lg px-2.5 py-2.5 text-xs transition active:bg-[#32322E] md:py-2 ${
+                      isActive
+                        ? "bg-[#30302E] font-medium text-[#ECEBE8]"
+                        : "text-[#B5B3AE] hover:bg-[#292926] hover:text-[#ECEBE8]"
+                    }`}
                   >
-                    ✕
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </nav>
+                    <span className="truncate pr-2">{conv.title}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteConversation(e, conv.id)}
+                      title="Hapus chat"
+                      aria-label="Hapus chat"
+                      className="shrink-0 rounded p-1.5 text-[#8E8D8A] opacity-80 transition hover:bg-[#3A3A37] hover:text-red-400 md:p-1 md:text-[#73726E] md:opacity-0 md:group-hover:opacity-100"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </nav>
+        </div>
       </aside>
 
       {/* Area Chat Utama */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
         <header className="shrink-0 border-b border-[#383835] bg-[#262624]/90 backdrop-blur">
-          <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between px-4">
-            <div className="flex items-center gap-2.5">
-              {!sidebarOpen && (
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(true)}
-                  title="Buka sidebar"
-                  className="rounded-lg p-1.5 text-[#9B9A97] transition hover:bg-[#30302E] hover:text-[#ECEBE8]"
+          <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between px-3 sm:px-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen((prev) => !prev)}
+                title="Buka sidebar"
+                aria-label="Buka sidebar"
+                className={`rounded-lg p-2 text-[#9B9A97] transition hover:bg-[#30302E] hover:text-[#ECEBE8] active:bg-[#383835] ${
+                  sidebarOpen ? "md:hidden" : ""
+                }`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
                 >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <path d="M9 3v18" />
-                  </svg>
-                </button>
-              )}
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M9 3v18" />
+                </svg>
+              </button>
               <img
                 src={giyuAvatar}
                 alt="Jidan AI"
-                className="h-8 w-8 rounded-full object-cover object-top ring-1 ring-[#3E3E3B]"
+                className="h-7 w-7 shrink-0 rounded-full object-cover object-top ring-1 ring-[#3E3E3B] sm:h-8 sm:w-8"
               />
-              <h1 className="text-base font-medium tracking-tight text-[#ECEBE8]">Jidan AI</h1>
+              <h1 className="truncate text-sm font-medium tracking-tight text-[#ECEBE8] sm:text-base">
+                Jidan AI
+              </h1>
             </div>
 
             {messages.length > 0 && (
               <button
                 type="button"
                 onClick={handleNewChat}
-                className="rounded-lg border border-[#3E3E3B] bg-[#30302E] px-3 py-1.5 text-xs font-medium text-[#C5C3BE] transition hover:border-[#52524E] hover:bg-[#383835] hover:text-[#ECEBE8]"
+                className="shrink-0 rounded-lg border border-[#3E3E3B] bg-[#30302E] px-2.5 py-1.5 text-xs font-medium text-[#C5C3BE] transition hover:border-[#52524E] hover:bg-[#383835] hover:text-[#ECEBE8] active:scale-[0.98] sm:px-3"
               >
                 Chat baru
               </button>
@@ -366,24 +393,24 @@ export default function App() {
         </header>
 
         {/* Daftar pesan */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-6">
+        <main className="flex-1 overflow-y-auto overscroll-contain">
+          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-3 py-4 sm:px-4 sm:py-6">
             {loadingHistory ? (
               <div className="flex flex-1 items-center justify-center text-sm text-[#9B9A97]">
                 Memuat percakapan...
               </div>
             ) : messages.length === 0 ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-6 py-10 text-center">
+              <div className="flex flex-1 flex-col items-center justify-center gap-5 py-6 text-center sm:gap-6 sm:py-10">
                 <img
                   src={giyuAvatar}
                   alt="Jidan AI"
-                  className="h-20 w-20 rounded-2xl object-cover object-top shadow-md ring-1 ring-[#3E3E3B]"
+                  className="h-16 w-16 rounded-2xl object-cover object-top shadow-md ring-1 ring-[#3E3E3B] sm:h-20 sm:w-20"
                 />
-                <div>
-                  <h2 className="text-2xl font-medium tracking-tight text-[#ECEBE8]">
+                <div className="px-2">
+                  <h2 className="text-xl font-medium tracking-tight text-[#ECEBE8] sm:text-2xl">
                     Halo, ada yang bisa dibantu?
                   </h2>
-                  <p className="mt-2 text-sm text-[#9B9A97]">
+                  <p className="mt-1.5 text-xs text-[#9B9A97] sm:mt-2 sm:text-sm">
                     Tanya apa saja ke Jidan AI, mulai dari coding sampai ide proyek.
                   </p>
                 </div>
@@ -393,7 +420,7 @@ export default function App() {
                       key={s}
                       type="button"
                       onClick={() => send(s)}
-                      className="rounded-xl border border-[#3E3E3B] bg-[#30302E]/80 px-4 py-3 text-left text-sm text-[#D6D4CE] transition hover:border-[#D97757]/60 hover:bg-[#30302E] hover:text-[#ECEBE8]"
+                      className="rounded-xl border border-[#3E3E3B] bg-[#30302E]/80 px-3.5 py-3 text-left text-xs text-[#D6D4CE] transition hover:border-[#D97757]/60 hover:bg-[#30302E] hover:text-[#ECEBE8] active:bg-[#383835] sm:px-4 sm:text-sm"
                     >
                       {s}
                     </button>
@@ -401,7 +428,7 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-5 sm:gap-6">
                 {messages.map((m) => (
                   <MessageBubble key={m.id} message={m} />
                 ))}
@@ -412,7 +439,7 @@ export default function App() {
         </main>
 
         {/* Input */}
-        <footer className="shrink-0 bg-[#262624] px-4 pb-4 pt-2">
+        <footer className="shrink-0 bg-[#262624] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-4">
           <div className="mx-auto w-full max-w-3xl">
             <ChatInput
               value={input}
@@ -421,7 +448,7 @@ export default function App() {
               onSend={(attachments) => send(input, attachments)}
               onStop={stop}
             />
-            <p className="mt-2 text-center text-[11px] text-[#8E8D8A]">
+            <p className="mt-1.5 text-center text-[10px] text-[#8E8D8A] sm:mt-2 sm:text-[11px]">
               Jidan AI adalah AI dan bisa membuat kesalahan. Cek kembali informasi penting.
             </p>
           </div>
