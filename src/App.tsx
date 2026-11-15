@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import * as pdfjsLib from "pdfjs-dist";
 import type { Attachment, Conversation, Message } from "./types";
 import {
   deleteConversation,
@@ -10,6 +11,11 @@ import {
 import MessageBubble from "./components/MessageBubble";
 import ChatInput from "./components/ChatInput";
 import giyuAvatar from "../assets/giyu.jpg";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
 
 const SUGGESTIONS = [
   "Jelaskan perbedaan REST API dan GraphQL",
@@ -35,7 +41,34 @@ function decodeTextDataUrl(dataUrl: string): string | null {
   }
 }
 
-function formatMessageForApi(m: Message): ChatPayload {
+async function extractPdfText(dataUrl: string): Promise<string | null> {
+  try {
+    const commaIdx = dataUrl.indexOf(",");
+    if (commaIdx === -1) return null;
+    const base64 = dataUrl.slice(commaIdx + 1);
+    const binary = atob(base64);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+
+    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+    const pages: string[] = [];
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        .map((item) => ("str" in item ? item.str : ""))
+        .join(" ");
+      pages.push(`--- Halaman ${pageNum} ---\n${pageText}`);
+    }
+
+    return pages.join("\n\n").trim();
+  } catch (err) {
+    console.error("Gagal mengekstrak PDF:", err);
+    return null;
+  }
+}
+
+async function formatMessageForApi(m: Message): Promise<ChatPayload> {
   const attachments = m.attachments || [];
   if (attachments.length === 0) {
     return { role: m.role, content: m.content };
@@ -47,20 +80,33 @@ function formatMessageForApi(m: Message): ChatPayload {
   let combinedText = m.content.trim();
 
   if (docs.length > 0) {
-    const docSections = docs.map((doc) => {
-      const isReadableText =
-        doc.type.startsWith("text/") ||
-        doc.type === "application/json" ||
-        TEXT_FILE_EXT.test(doc.name);
+    const docSections = await Promise.all(
+      docs.map(async (doc) => {
+        const isPdf =
+          doc.type === "application/pdf" || doc.name.toLowerCase().endsWith(".pdf");
 
-      if (isReadableText && doc.dataUrl) {
-        const extracted = decodeTextDataUrl(doc.dataUrl);
-        if (extracted) {
-          return `[Lampiran Dokumen: ${doc.name}]\n\`\`\`\n${extracted.slice(0, 15000)}\n\`\`\``;
+        if (isPdf && doc.dataUrl) {
+          const pdfText = await extractPdfText(doc.dataUrl);
+          if (pdfText) {
+            return `[Lampiran PDF: ${doc.name}]\n\`\`\`\n${pdfText.slice(0, 15000)}\n\`\`\``;
+          }
         }
-      }
-      return `[Lampiran File: ${doc.name} (${doc.type || "dokumen"})]`;
-    });
+
+        const isReadableText =
+          doc.type.startsWith("text/") ||
+          doc.type === "application/json" ||
+          TEXT_FILE_EXT.test(doc.name);
+
+        if (isReadableText && doc.dataUrl) {
+          const extracted = decodeTextDataUrl(doc.dataUrl);
+          if (extracted) {
+            return `[Lampiran Dokumen: ${doc.name}]\n\`\`\`\n${extracted.slice(0, 15000)}\n\`\`\``;
+          }
+        }
+
+        return `[Lampiran File: ${doc.name} (${doc.type || "dokumen"})]`;
+      })
+    );
 
     combinedText = [combinedText, ...docSections].filter(Boolean).join("\n\n");
   }
@@ -209,9 +255,11 @@ export default function App() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const payload: ChatPayload[] = history
-      .filter((m) => !m.error && (m.content || (m.attachments && m.attachments.length > 0)))
-      .map(formatMessageForApi);
+    const payload: ChatPayload[] = await Promise.all(
+      history
+        .filter((m) => !m.error && (m.content || (m.attachments && m.attachments.length > 0)))
+        .map(formatMessageForApi)
+    );
 
     try {
       await streamChat(
