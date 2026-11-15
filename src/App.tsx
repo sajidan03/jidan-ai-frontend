@@ -92,7 +92,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth >= 768 : true
+    typeof window !== "undefined" ? window.innerWidth >= 768 : false
   );
 
   const abortRef = useRef<AbortController | null>(null);
@@ -253,7 +253,7 @@ export default function App() {
   const stop = () => abortRef.current?.abort();
 
   return (
-    <div className="relative flex h-screen h-dvh w-full overflow-hidden bg-[#262624] text-[#ECEBE8]">
+    <div className="fixed inset-0 flex overflow-hidden bg-[#262624] text-[#ECEBE8]">
       {/* Backdrop gelap untuk mobile saat sidebar terbuka */}
       {sidebarOpen && (
         <div
@@ -347,7 +347,7 @@ export default function App() {
       {/* Area Chat Utama */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
-        <header className="shrink-0 border-b border-[#383835] bg-[#262624]/90 backdrop-blur">
+        <header className="shrink-0 border-b border-[#383835] bg-[#262624]/95 backdrop-blur">
           <div className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between px-3 sm:px-4">
             <div className="flex min-w-0 items-center gap-2">
               <button
@@ -355,13 +355,13 @@ export default function App() {
                 onClick={() => setSidebarOpen((prev) => !prev)}
                 title="Buka sidebar"
                 aria-label="Buka sidebar"
-                className={`rounded-lg p-2 text-[#9B9A97] transition hover:bg-[#30302E] hover:text-[#ECEBE8] active:bg-[#383835] ${
+                className={`-ml-1 rounded-lg p-2 text-[#ECEBE8] transition hover:bg-[#30302E] active:bg-[#383835] ${
                   sidebarOpen ? "md:hidden" : ""
                 }`}
               >
                 <svg
                   viewBox="0 0 24 24"
-                  className="h-4 w-4"
+                  className="h-5 w-5"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
@@ -393,14 +393,14 @@ export default function App() {
         </header>
 
         {/* Daftar pesan */}
-        <main className="flex-1 overflow-y-auto overscroll-contain">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-3 py-4 sm:px-4 sm:py-6">
             {loadingHistory ? (
-              <div className="flex flex-1 items-center justify-center text-sm text-[#9B9A97]">
+              <div className="my-auto flex items-center justify-center text-sm text-[#9B9A97]">
                 Memuat percakapan...
               </div>
             ) : messages.length === 0 ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-5 py-6 text-center sm:gap-6 sm:py-10">
+              <div className="my-auto flex flex-col items-center gap-4 py-4 text-center sm:gap-6 sm:py-10">
                 <img
                   src={giyuAvatar}
                   alt="Jidan AI"
@@ -420,7 +420,7 @@ export default function App() {
                       key={s}
                       type="button"
                       onClick={() => send(s)}
-                      className="rounded-xl border border-[#3E3E3B] bg-[#30302E]/80 px-3.5 py-3 text-left text-xs text-[#D6D4CE] transition hover:border-[#D97757]/60 hover:bg-[#30302E] hover:text-[#ECEBE8] active:bg-[#383835] sm:px-4 sm:text-sm"
+                      className="rounded-xl border border-[#3E3E3B] bg-[#30302E]/80 px-3.5 py-2.5 text-left text-xs text-[#D6D4CE] transition hover:border-[#D97757]/60 hover:bg-[#30302E] hover:text-[#ECEBE8] active:bg-[#383835] sm:px-4 sm:py-3 sm:text-sm"
                     >
                       {s}
                     </button>
