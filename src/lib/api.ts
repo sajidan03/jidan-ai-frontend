@@ -1,6 +1,9 @@
 import type { Conversation, Message } from "../types";
 
-const API_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+const API_URL = (
+  import.meta.env.VITE_API_URL ||
+  "https://api-jidan-ai.vercel.app"
+).replace(/\/+$/, "");
 
 export type ChatContentPart =
   | { type: "text"; text: string }
