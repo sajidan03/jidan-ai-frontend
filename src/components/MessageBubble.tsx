@@ -10,6 +10,81 @@ interface Part {
   lang?: string;
 }
 
+/* ------------------------------------------------------------------ */
+/* Animasi (di-inject sekali ke <head>, tidak perlu ubah tailwind config) */
+/* ------------------------------------------------------------------ */
+const STYLE_ID = "jidan-bubble-styles";
+
+const BUBBLE_CSS = `
+@keyframes jidan-wave {
+  0%, 60%, 100% { transform: translateY(0) scale(0.85); opacity: 0.4; }
+  30%           { transform: translateY(-5px) scale(1);  opacity: 1; }
+}
+@keyframes jidan-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(217, 119, 87, 0.50); }
+  70%  { box-shadow: 0 0 0 9px rgba(217, 119, 87, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(217, 119, 87, 0); }
+}
+@keyframes jidan-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes jidan-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.jidan-msg-in { animation: jidan-in 0.28s ease-out both; }
+
+.jidan-avatar-pulse { animation: jidan-ring 1.8s ease-out infinite; }
+
+.jidan-dot {
+  display: inline-block;
+  height: 7px;
+  width: 7px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #E5987E, #D97757);
+  animation: jidan-wave 1.2s ease-in-out infinite;
+}
+
+.jidan-shimmer-text {
+  background-image: linear-gradient(
+    90deg,
+    #7F7E7A 0%,
+    #7F7E7A 40%,
+    #E5987E 50%,
+    #7F7E7A 60%,
+    #7F7E7A 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: jidan-shimmer 2.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jidan-msg-in,
+  .jidan-avatar-pulse,
+  .jidan-dot,
+  .jidan-shimmer-text { animation: none; }
+  .jidan-dot { opacity: 0.8; }
+  .jidan-shimmer-text { -webkit-text-fill-color: #9B9A97; color: #9B9A97; }
+}
+`;
+
+if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
+  const el = document.createElement("style");
+  el.id = STYLE_ID;
+  el.textContent = BUBBLE_CSS;
+  document.head.appendChild(el);
+}
+
+/* ------------------------------------------------------------------ */
+/* Parsing konten                                                      */
+/* ------------------------------------------------------------------ */
+
 // Pisahkan teks biasa dan blok kode ```...``` (aman untuk blok yang belum selesai saat streaming)
 function parseContent(content: string): Part[] {
   const parts: Part[] = [];
@@ -77,6 +152,32 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Indikator loading AI (bubble + 3 titik gelombang + teks shimmer)    */
+/* ------------------------------------------------------------------ */
+function TypingIndicator() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label="Jidan AI sedang mengetik"
+      className="inline-flex items-center gap-3 rounded-2xl rounded-tl-md border border-[#3E3E3B] bg-[#1F1F1D] px-4 py-3 shadow-sm shadow-black/20"
+    >
+      <span className="flex items-center gap-1.5">
+        <span className="jidan-dot" style={{ animationDelay: "0s" }} />
+        <span className="jidan-dot" style={{ animationDelay: "0.15s" }} />
+        <span className="jidan-dot" style={{ animationDelay: "0.3s" }} />
+      </span>
+      <span className="jidan-shimmer-text text-xs font-medium tracking-wide">
+        Jidan AI sedang berpikir…
+      </span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Komponen utama                                                      */
+/* ------------------------------------------------------------------ */
 export default function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === "user";
 
@@ -85,7 +186,7 @@ export default function MessageBubble({ message }: { message: Message }) {
     const hasAttachments = Boolean(message.attachments && message.attachments.length > 0);
 
     return (
-      <div className="group flex flex-col items-end gap-1.5">
+      <div className="jidan-msg-in group flex flex-col items-end gap-1.5">
         {hasAttachments && (
           <div className="flex max-w-[85%] flex-wrap justify-end gap-2 sm:max-w-[75%]">
             {message.attachments!.map((att) =>
@@ -126,7 +227,7 @@ export default function MessageBubble({ message }: { message: Message }) {
         )}
 
         {message.content && (
-          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-[#181816] px-4 py-2.5 text-sm leading-6 text-[#ECEBE8] sm:max-w-[75%]">
+          <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md border border-[#2E2E2B] bg-[#181816] px-4 py-2.5 text-sm leading-6 text-[#ECEBE8] shadow-sm shadow-black/20 sm:max-w-[75%]">
             {message.content}
           </div>
         )}
@@ -138,25 +239,24 @@ export default function MessageBubble({ message }: { message: Message }) {
 
   // Pesan AI
   const parts = parseContent(message.content);
-  const canCopy = message.content !== "" && !message.error;
+  const isLoading = message.content === "";
+  const canCopy = !isLoading && !message.error;
 
   return (
-    <div className="group flex items-start gap-3">
+    <div className="jidan-msg-in group flex items-start gap-3">
       <img
         src={giyuAvatar}
         alt="Jidan AI"
-        className="mt-0.5 h-8 w-8 shrink-0 rounded-full object-cover object-top ring-1 ring-[#3E3E3B]"
+        className={`mt-0.5 h-8 w-8 shrink-0 rounded-full object-cover object-top ring-1 ring-[#3E3E3B] ${
+          isLoading ? "jidan-avatar-pulse" : ""
+        }`}
       />
 
       <div className="min-w-0 flex-1 text-sm leading-7 text-[#ECEBE8]">
-        {message.content === "" ? (
-          <div className="flex items-center gap-1.5 py-2" aria-label="Jidan AI sedang mengetik">
-            <span className="h-2 w-2 animate-bounce rounded-full bg-[#D97757] [animation-delay:-0.3s]" />
-            <span className="h-2 w-2 animate-bounce rounded-full bg-[#D97757] [animation-delay:-0.15s]" />
-            <span className="h-2 w-2 animate-bounce rounded-full bg-[#D97757]" />
-          </div>
+        {isLoading ? (
+          <TypingIndicator />
         ) : message.error ? (
-          <div className="rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-2.5 text-red-300">
+          <div className="rounded-2xl rounded-tl-md border border-red-900/60 bg-red-950/40 px-4 py-2.5 text-red-300">
             ⚠️ {message.content}
           </div>
         ) : (
