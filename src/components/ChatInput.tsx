@@ -11,7 +11,7 @@ interface Props {
 }
 
 const MAX_FILES = 5;
-const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_MB = 100;
 const ACCEPTED_TYPES =
   "image/*,.pdf,.doc,.docx,.txt,.csv,.json,.md,.xls,.xlsx,.js,.ts,.py";
 
