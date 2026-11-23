@@ -106,23 +106,31 @@ function parseContent(content: string): Part[] {
   return parts;
 }
 
-// `kode` inline
+// `kode` inline dan **tebal** (bold yang belum ditutup saat streaming tetap tampil apa adanya)
 function InlineText({ text }: { text: string }) {
-  const chunks = text.split(/(`[^`\n]+`)/g);
+  const chunks = text.split(/(`[^`\n]+`|\*\*[^*\n]+\*\*)/g);
   return (
     <>
-      {chunks.map((chunk, i) =>
-        chunk.startsWith("`") && chunk.endsWith("`") && chunk.length > 2 ? (
-          <code
-            key={i}
-            className="rounded bg-[#30302E] px-1.5 py-0.5 font-mono text-[0.85em] text-[#E5987E]"
-          >
-            {chunk.slice(1, -1)}
-          </code>
-        ) : (
-          <span key={i}>{chunk}</span>
-        )
-      )}
+      {chunks.map((chunk, i) => {
+        if (chunk.startsWith("`") && chunk.endsWith("`") && chunk.length > 2) {
+          return (
+            <code
+              key={i}
+              className="rounded bg-[#30302E] px-1.5 py-0.5 font-mono text-[0.85em] text-[#E5987E]"
+            >
+              {chunk.slice(1, -1)}
+            </code>
+          );
+        }
+        if (chunk.startsWith("**") && chunk.endsWith("**") && chunk.length > 4) {
+          return (
+            <strong key={i} className="font-semibold text-white">
+              <InlineText text={chunk.slice(2, -2)} />
+            </strong>
+          );
+        }
+        return <span key={i}>{chunk}</span>;
+      })}
     </>
   );
 }
