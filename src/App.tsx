@@ -28,6 +28,9 @@ const TEXT_FILE_EXT = /\.(txt|md|csv|json|js|jsx|ts|tsx|py|php|html|css|sql|xml|
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
+// Samakan dengan MAX_HISTORY_MESSAGES di backend; backend menolak lebih dari 50 pesan.
+const MAX_HISTORY = 15;
+
 function decodeTextDataUrl(dataUrl: string): string | null {
   try {
     const commaIdx = dataUrl.indexOf(",");
@@ -258,6 +261,7 @@ export default function App() {
     const payload: ChatPayload[] = await Promise.all(
       history
         .filter((m) => !m.error && (m.content || (m.attachments && m.attachments.length > 0)))
+        .slice(-MAX_HISTORY)
         .map(formatMessageForApi)
     );
 
@@ -275,6 +279,21 @@ export default function App() {
           botMessageId: botMsg.id,
         }
       );
+      // Model kadang hanya "berpikir" dan tidak mengirim jawaban: jangan hilang diam-diam.
+      if (!controller.signal.aborted) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === botMsg.id && !m.content
+              ? {
+                  ...m,
+                  content:
+                    "Model tidak mengirim jawaban (jatah token habis dipakai berpikir). Coba lagi atau persingkat pertanyaan.",
+                  error: true,
+                }
+              : m
+          )
+        );
+      }
     } catch (err) {
       const error = err as Error;
       if (error.name !== "AbortError") {
